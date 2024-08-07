@@ -6,21 +6,38 @@ import fs from "fs/promises"
 import { notFound, redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 
-const fileSchema = z.instanceof(File, { message: "Required" })
-const imageSchema = fileSchema.refine(
-  file => file.size === 0 || file.type.startsWith("image/")
-)
+// Definir un esquema para un objeto de archivo
+const fileSchema = z.object({
+  name: z.string(),
+  size: z.number().min(1, { message: "Required" }),
+  type: z.string().regex(/^image\//, { message: "Must be an image" }),
+})
 
 const addSchema = z.object({
   name: z.string().min(1),
   description: z.string().min(1),
   priceInCents: z.coerce.number().int().min(1),
-  file: fileSchema.refine(file => file.size > 0, "Required"),
-  image: imageSchema.refine(file => file.size > 0, "Required"),
+  file: fileSchema,
+  image: fileSchema,
 })
 
 export async function addProduct(prevState: unknown, formData: FormData) {
-  const result = addSchema.safeParse(Object.fromEntries(formData.entries()))
+  const entries = Object.fromEntries(formData.entries())
+  
+  // Transformar archivos en objetos compatibles con el esquema
+  entries.file = {
+    name: (entries.file as File).name,
+    size: (entries.file as File).size,
+    type: (entries.file as File).type,
+  }
+
+  entries.image = {
+    name: (entries.image as File).name,
+    size: (entries.image as File).size,
+    type: (entries.image as File).type,
+  }
+
+  const result = addSchema.safeParse(entries)
   if (result.success === false) {
     return result.error.formErrors.fieldErrors
   }
@@ -29,13 +46,13 @@ export async function addProduct(prevState: unknown, formData: FormData) {
 
   await fs.mkdir("products", { recursive: true })
   const filePath = `products/${crypto.randomUUID()}-${data.file.name}`
-  await fs.writeFile(filePath, Buffer.from(await data.file.arrayBuffer()))
+  await fs.writeFile(filePath, Buffer.from(await (formData.get("file") as File).arrayBuffer()))
 
   await fs.mkdir("public/products", { recursive: true })
   const imagePath = `/products/${crypto.randomUUID()}-${data.image.name}`
   await fs.writeFile(
     `public${imagePath}`,
-    Buffer.from(await data.image.arrayBuffer())
+    Buffer.from(await (formData.get("image") as File).arrayBuffer())
   )
 
   await db.product.create({
@@ -57,7 +74,7 @@ export async function addProduct(prevState: unknown, formData: FormData) {
 
 const editSchema = addSchema.extend({
   file: fileSchema.optional(),
-  image: imageSchema.optional(),
+  image: fileSchema.optional(),
 })
 
 export async function updateProduct(
@@ -65,7 +82,25 @@ export async function updateProduct(
   prevState: unknown,
   formData: FormData
 ) {
-  const result = editSchema.safeParse(Object.fromEntries(formData.entries()))
+  const entries = Object.fromEntries(formData.entries())
+
+  if (entries.file) {
+    entries.file = {
+      name: (entries.file as File).name,
+      size: (entries.file as File).size,
+      type: (entries.file as File).type,
+    }
+  }
+
+  if (entries.image) {
+    entries.image = {
+      name: (entries.image as File).name,
+      size: (entries.image as File).size,
+      type: (entries.image as File).type,
+    }
+  }
+
+  const result = editSchema.safeParse(entries)
   if (result.success === false) {
     return result.error.formErrors.fieldErrors
   }
@@ -76,19 +111,19 @@ export async function updateProduct(
   if (product == null) return notFound()
 
   let filePath = product.filePath
-  if (data.file != null && data.file.size > 0) {
+  if (data.file && data.file.size > 0) {
     await fs.unlink(product.filePath)
     filePath = `products/${crypto.randomUUID()}-${data.file.name}`
-    await fs.writeFile(filePath, Buffer.from(await data.file.arrayBuffer()))
+    await fs.writeFile(filePath, Buffer.from(await (formData.get("file") as File).arrayBuffer()))
   }
 
   let imagePath = product.imagePath
-  if (data.image != null && data.image.size > 0) {
+  if (data.image && data.image.size > 0) {
     await fs.unlink(`public${product.imagePath}`)
     imagePath = `/products/${crypto.randomUUID()}-${data.image.name}`
     await fs.writeFile(
       `public${imagePath}`,
-      Buffer.from(await data.image.arrayBuffer())
+      Buffer.from(await (formData.get("image") as File).arrayBuffer())
     )
   }
 

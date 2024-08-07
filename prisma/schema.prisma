@@ -10,6 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
 model Product {
   id                     String                 @id @default(uuid())
   name                   String
@@ -42,7 +43,7 @@ model Order {
   productId String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
-}
+}  
 
 model DownloadVerification {
   id        String   @id @default(uuid())
