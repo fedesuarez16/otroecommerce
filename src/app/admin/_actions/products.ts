@@ -29,19 +29,17 @@ export async function addProduct(prevState: unknown, formData: FormData) {
   
   // Asegurarse de que los archivos existen y transformarlos en objetos compatibles con el esquema
   if (file) {
-    entries.file = {
-      name: file.name,
-      size: file.size,
+    entries.file = new File([file], file.name, {
       type: file.type,
-    }
+      lastModified: file.lastModified,
+    });
   }
   
   if (image) {
-    entries.image = {
-      name: image.name,
-      size: image.size,
+    entries.image = new File([image], image.name, {
       type: image.type,
-    }
+      lastModified: image.lastModified,
+    });
   }
 
   const result = addSchema.safeParse(entries)
@@ -79,6 +77,7 @@ export async function addProduct(prevState: unknown, formData: FormData) {
   redirect("/admin/products")
 }
 
+
 const editSchema = addSchema.extend({
   file: fileSchema.optional(),
   image: fileSchema.optional(),
@@ -95,19 +94,17 @@ export async function updateProduct(
   const image = formData.get("image") as File;
 
   if (file && file.size > 0) {
-    entries.file = {
-      name: file.name,
-      size: file.size,
+    entries.file = new File([file], file.name, {
       type: file.type,
-    }
+      lastModified: file.lastModified,
+    });
   }
 
   if (image && image.size > 0) {
-    entries.image = {
-      name: image.name,
-      size: image.size,
+    entries.image = new File([image], image.name, {
       type: image.type,
-    }
+      lastModified: image.lastModified,
+    });
   }
 
   const result = editSchema.safeParse(entries)
@@ -152,26 +149,4 @@ export async function updateProduct(
   revalidatePath("/products")
 
   redirect("/admin/products")
-}
-
-export async function toggleProductAvailability(
-  id: string,
-  isAvailableForPurchase: boolean
-) {
-  await db.product.update({ where: { id }, data: { isAvailableForPurchase } })
-
-  revalidatePath("/")
-  revalidatePath("/products")
-}
-
-export async function deleteProduct(id: string) {
-  const product = await db.product.delete({ where: { id } })
-
-  if (product == null) return notFound()
-
-  await fs.unlink(product.filePath)
-  await fs.unlink(`public${product.imagePath}`)
-
-  revalidatePath("/")
-  revalidatePath("/products")
 }
